@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Track your SULTARA order</title><meta name="description" content="Track your SULTARA order securely with your order ID and phone number.">
+<style>
+:root{color-scheme:dark;--g:#d4a84b;--g2:#f3d98b;--l:#3a2f1c;--m:#a89d86}*{box-sizing:border-box}
+body{margin:0;background:#0a0806;color:#f1e8d6;font:17px/1.6 system-ui,sans-serif;padding:24px 5vw;max-width:760px;margin:auto}
+h1{font-family:Georgia,serif;color:var(--g2);font-size:38px;margin:.2em 0}a{color:var(--g2)}
+label{font-size:14px;color:var(--m)}input{width:100%;background:#15110c;border:1px solid var(--l);color:inherit;padding:12px;margin:4px 0 14px;font:inherit;border-radius:3px}
+button,.b{background:linear-gradient(100deg,#b8892e,#f3d98b,#b8892e);color:#1a1204;border:0;padding:12px 22px;border-radius:3px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block;margin:0 8px 8px 0}
+.o{background:none;color:var(--g2);border:1px solid var(--g)}#err{color:#f88}[hidden]{display:none!important}
+.bar{height:8px;background:var(--l);border-radius:4px;margin:18px 0}.bar i{display:block;height:100%;background:var(--g);border-radius:4px}
+ol{list-style:none;padding:0;margin:0}li{padding:10px 0 10px 30px;position:relative;color:var(--m);border-left:2px solid var(--l);margin-left:8px}
+li:before{content:"";position:absolute;left:-9px;top:15px;width:16px;height:16px;border-radius:50%;background:#0a0806;border:2px solid var(--l)}
+li.d{color:#f1e8d6;border-color:var(--g)}li.d:before{background:var(--g);border-color:var(--g)}li small{display:block;color:var(--m)}
+dl{display:grid;grid-template-columns:140px 1fr;gap:6px 12px}dt{color:var(--m)}dd{margin:0}
+</style></head><body>
+<a href="/">← Back to shop</a><h1>Track your order</h1>
+<div id="f1"><label for="oid">Order ID (for example SULTARA-2026-00001)</label><input id="oid" autocomplete="off">
+<label for="ph">Phone number used for the order</label><input id="ph" inputmode="tel"><button id="req">Send code</button></div>
+<div id="f2" hidden><p id="sent"></p><label for="otp">6-digit code</label><input id="otp" inputmode="numeric" maxlength="6"><button id="ver">Show my order</button></div>
+<p id="err" role="alert"></p>
+<div id="res" hidden></div>
+<script>
+const $=i=>document.getElementById(i);let T='';
+const t=(tag,txt,cls)=>{const e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e};
+async function call(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Failed');return d}
+$('req').onclick=async()=>{$('err').textContent='';try{const d=await call('POST','/api/track/request',{orderId:$('oid').value,phone:$('ph').value});$('f2').hidden=false;$('sent').textContent=d.message}catch(e){$('err').textContent=e.message}};
+$('ver').onclick=async()=>{$('err').textContent='';try{const d=await call('POST','/api/track/verify',{orderId:$('oid').value,otp:$('otp').value});T=d.token;load()}catch(e){$('err').textContent=e.message}};
+const dt=s=>s?new Date(s).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'';
+const NAMES={placed:'Order placed',confirmed:'',processing:'Processing',packed:'Packed',shipped:'Shipped',out_for_delivery:'Out for delivery',delivered:'Delivered'};
+async function load(){try{const o=await call('GET','/api/track/order');$('f1').hidden=$('f2').hidden=true;const R=$('res');R.hidden=false;R.replaceChildren();
+ NAMES.confirmed=o.paymentMethod==='cod'?'COD order confirmed':'Payment confirmed';
+ const keys=Object.keys(NAMES),cancelled=o.orderStatus==='cancelled';
+ const idx=keys.indexOf(o.orderStatus);
+ R.append(t('h2',o.orderId));
+ if(cancelled)R.append(t('p','This order was cancelled.'));
+ else{const bar=t('div','','bar'),i=t('i');i.style.width=((idx+1)/keys.length*100)+'%';bar.append(i);R.append(bar)}
+ const hist={};o.statusHistory.forEach(h=>{const k=h.status.startsWith('payment')?'confirmed':h.status.includes('COD order')||h.status==='order placed'?'placed':h.status;hist[k]=h.at});
+ const ol=t('ol');keys.forEach((k,j)=>{const li=t('li',NAMES[k],!cancelled&&j<=idx?'d':'');if(hist[k])li.append(t('small',dt(hist[k])));ol.append(li)});R.append(ol);
+ const dl=t('dl');const add=(a,b)=>{if(b){dl.append(t('dt',a),t('dd',b))}};
+ add('Order date',dt(o.createdAt));add('Name',o.customerName);add('Items',o.items.map(i=>i.name+' × '+i.qty).join(', '));add('Total','₹'+o.amount);
+ add('Payment',o.paymentMethod==='cod'?'Cash on delivery':'Online');add('Payment status',o.paymentStatus.replace(/_/g,' '));add('Address',o.address);
+ add('Courier',o.courierName);add('Tracking no.',o.trackingNumber);add('Estimated delivery',o.estimatedDelivery);add('Note',o.shippingNotes);add('Last updated',dt(o.updatedAt));
+ R.append(dl);
+ if(o.trackingUrl){const a=t('a','Track shipment with courier','b');a.href=o.trackingUrl;a.target='_blank';a.rel='noopener noreferrer';R.append(a)}
+ const w=t('a','Contact support on WhatsApp','b o');w.href='https://wa.me/917075656837?text='+encodeURIComponent('Hi SULTARA, I need help with order '+o.orderId);w.target='_blank';w.rel='noopener';R.append(w);
+ const rf=t('button','Refresh','o');rf.onclick=load;R.append(rf);
+ if(o.paymentMethod==='cod'&&['placed','confirmed'].includes(o.orderStatus)){const c=t('button','Cancel order','o');c.onclick=async()=>{if(confirm('Cancel this order?')){try{await call('POST','/api/track/cancel');load()}catch(e){$('err').textContent=e.message}}};R.append(c)}
+}catch(e){$('err').textContent=e.message}}
+</script></body></html>

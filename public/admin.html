@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>SULTARA Admin</title>
+<style>
+:root{color-scheme:dark;--g:#d4a84b;--g2:#f3d98b;--l:#3a2f1c;--m:#a89d86}*{box-sizing:border-box}
+body{margin:0;background:#0a0806;color:#f1e8d6;font:16px/1.5 system-ui,sans-serif;padding:20px;max-width:1000px;margin:auto}
+h1,h2{font-family:Georgia,serif;color:var(--g2);margin:.3em 0}
+input,textarea,select{width:100%;background:#15110c;border:1px solid var(--l);color:inherit;padding:10px;margin:4px 0 12px;font:inherit;border-radius:3px}
+label{font-size:14px;color:var(--m)}button{background:var(--g);color:#1a1204;border:0;padding:10px 18px;border-radius:3px;font:inherit;cursor:pointer;margin:0 6px 6px 0}
+button.o{background:none;color:var(--g2);border:1px solid var(--g)}button.d{background:#7a2323;color:#fff}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0 14px}
+.card{border:1px solid var(--l);padding:14px;margin:10px 0;border-radius:6px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.card img{width:64px;height:64px;object-fit:cover;border-radius:4px}.card .i{flex:1;min-width:200px}
+.tabs button{background:none;color:var(--g2);border:1px solid var(--l)}.tabs button.on{background:var(--g);color:#1a1204}
+#err{color:#f88}small{color:var(--m)}[hidden]{display:none!important}
+</style></head><body>
+<h1>SULTARA admin</h1>
+<div id="login"><label for="e">Email</label><input id="e" type="email" autocomplete="username"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"><button id="go">Log in</button></div>
+<div id="app" hidden>
+<div class="tabs"><button id="tp" class="on">Products</button><button id="to">Orders</button><button class="o" id="out">Log out</button></div>
+<div id="vp"><h2 id="ft">Add a product</h2>
+<div class="row"><div><label for="name">Name</label><input id="name"></div><div><label for="pack">Pack size (for example 10 pieces)</label><input id="pack"></div>
+<div><label for="price">Selling price (₹)</label><input id="price" type="number" min="1"></div><div><label for="mrp">MRP (₹)</label><input id="mrp" type="number" min="0"></div><div><label for="stock">Stock (packs)</label><input id="stock" type="number" min="0"></div></div>
+<label for="desc">Description</label><textarea id="desc" rows="2"></textarea>
+<label for="ing">Ingredients</label><input id="ing">
+<label for="img">Product photo (JPG, PNG or WebP)</label><input id="img" type="file" accept="image/jpeg,image/png,image/webp"><img id="pv" alt="" style="max-height:90px;display:none">
+<label><input type="checkbox" id="act" checked style="width:auto"> Show on the shop</label><br>
+<button id="save">Save product</button><button class="o" id="reset">Clear form</button><p id="err"></p>
+<h2>All products</h2><div id="plist"></div></div>
+<div id="vo" hidden><h2>Orders</h2><div id="olist"></div></div></div>
+<script>
+let T=sessionStorage.getItem('at')||'',img='',editId=null;const $=i=>document.getElementById(i);
+const el=(t,p,...k)=>{const e=document.createElement(t);Object.assign(e,p||{});k.forEach(c=>e.append(c));return e};
+async function api(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined});
+ const d=await r.json().catch(()=>({}));if(r.status===401&&u!=='/api/admin/login'){logout();throw new Error(d.error)}if(!r.ok)throw new Error(d.error||'Failed');return d}
+function logout(){T='';sessionStorage.removeItem('at');$('app').hidden=true;$('login').hidden=false}
+function show(){$('login').hidden=true;$('app').hidden=false;loadP()}
+$('go').onclick=async()=>{try{const d=await api('POST','/api/admin/login',{email:$('e').value,password:$('pw').value});T=d.token;sessionStorage.setItem('at',T);show()}catch(e){alert(e.message)}};
+$('out').onclick=logout;
+$('tp').onclick=()=>{$('vp').hidden=false;$('vo').hidden=true;$('tp').className='on';$('to').className=''};
+$('to').onclick=()=>{$('vp').hidden=true;$('vo').hidden=false;$('to').className='on';$('tp').className='';loadO()};
+$('img').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+ const s=Math.min(1,700/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+ img=c.toDataURL('image/jpeg',.8);$('pv').src=img;$('pv').style.display='block'};im.src=r.result};r.readAsDataURL(f)};
+function clear(){editId=null;img='';['name','pack','price','mrp','stock','desc','ing'].forEach(i=>$(i).value='');$('img').value='';$('pv').style.display='none';$('act').checked=true;$('ft').textContent='Add a product';$('err').textContent=''}
+$('reset').onclick=clear;
+$('save').onclick=async()=>{const b={name:$('name').value,packSize:$('pack').value,price:$('price').value,mrp:$('mrp').value,stock:$('stock').value,description:$('desc').value,ingredients:$('ing').value,image:img,active:$('act').checked};
+ if(!b.name.trim()||!(+b.price>0)){$('err').textContent='Enter a name and a price above 0.';return}
+ try{await api(editId?'PUT':'POST','/api/admin/products'+(editId?'/'+editId:''),b);clear();loadP()}catch(e){$('err').textContent=e.message}};
+async function loadP(){const L=await api('GET','/api/admin/products');const box=$('plist');box.replaceChildren();
+ L.forEach(p=>{const c=el('div',{className:'card'});if(p.image)c.append(el('img',{src:p.image,alt:''}));
+  c.append(el('div',{className:'i'},el('b',{},p.name),el('br'),el('small',{},`₹${p.price} · ${p.packSize||''} · stock ${p.stock} · ${p.active?'visible':'hidden'}`)));
+  const ed=el('button',{className:'o',textContent:'Edit'});ed.onclick=()=>{editId=p._id;img=p.image||'';$('name').value=p.name;$('pack').value=p.packSize;$('price').value=p.price;$('mrp').value=p.mrp;$('stock').value=p.stock;$('desc').value=p.description;$('ing').value=p.ingredients;$('act').checked=p.active;$('ft').textContent='Edit product';scrollTo(0,0)};
+  const de=el('button',{className:'d',textContent:'Delete'});de.onclick=async()=>{if(confirm('Delete '+p.name+'?')){await api('DELETE','/api/admin/products/'+p._id);loadP()}};
+  c.append(ed,de);box.append(c)})}
+const ST=['placed','confirmed','processing','packed','shipped','out_for_delivery','delivered','cancelled'];
+async function loadO(){const L=await api('GET','/api/admin/orders');const box=$('olist');box.replaceChildren();if(!L.length)box.append('No orders yet.');
+ L.forEach(o=>{const c=el('div',{className:'card'});
+  c.append(el('div',{className:'i'},el('b',{},o.orderId+' · ₹'+o.amount),el('br'),el('small',{},`${o.customer.name}, ${o.customer.phone} · ${o.paymentMethod} (${o.paymentStatus})`),el('br'),el('small',{},o.items.map(i=>i.name+' × '+i.qty).join(', ')),el('br'),el('small',{},o.customer.address)));
+  const s=el('select',{});ST.forEach(x=>s.append(new Option(x.replace(/_/g,' '),x,false,x===o.orderStatus)));
+  s.onchange=async()=>{try{await api('PATCH','/api/admin/orders/'+o._id,{orderStatus:s.value});loadO()}catch(e){alert(e.message)}};
+  const w=el('a',{href:'https://wa.me/91'+o.customer.phone.replace(/\D/g,'').slice(-10),target:'_blank',rel:'noopener',textContent:'WhatsApp customer',style:'color:#f3d98b'});
+  const f=n=>{const i=el('input',{placeholder:n[1],value:o[n[0]]||''});i.style.margin='2px 0';return i};
+  const fs=[['courierName','Courier name'],['trackingNumber','Tracking number'],['trackingUrl','Tracking link (https://...)'],['estimatedDelivery','Estimated delivery date'],['shippingNotes','Shipping note']].map(f);
+  const sv=el('button',{className:'o',textContent:'Save shipping details'});
+  sv.onclick=async()=>{const b={};['courierName','trackingNumber','trackingUrl','estimatedDelivery','shippingNotes'].forEach((k,j)=>b[k]=fs[j].value);try{await api('PATCH','/api/admin/orders/'+o._id,b);sv.textContent='Saved'}catch(e){alert(e.message)}};
+  const sh=el('div',{style:'width:100%'},...fs,sv);
+  c.append(s,w,sh);box.append(c)})}
+if(T)show();
+</script></body></html>
