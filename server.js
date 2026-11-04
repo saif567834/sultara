@@ -151,6 +151,9 @@ app.post('/api/track/cancel',trackAuth,async(req,res)=>{const o=req.order;
  await release(o.items.map(i=>({product:{_id:i.productId},qty:i.qty})));o.orderStatus='cancelled';o.statusHistory.push({status:'cancelled by customer'});await o.save();res.json(view(o))});
 app.get('/track-order',(q,r)=>r.sendFile(path.join(__dirname,'public','tracking.html')));
 app.use(express.static(path.join(__dirname,'public')));
-mongoose.connect(process.env.MONGODB_URI).then(async()=>{
- if(!(await Product.countDocuments()))await Product.create({name:'Chocolate Coated Stuffed Dates',description:'Premium dates with a rich chocolate coating, filled with cashew, almond and pistachio.',price:249,mrp:249,packSize:'10 pieces',ingredients:'Dates, chocolate, cashew, almond, pistachio',image:'/pouch.jpg',stock:100});
- app.listen(process.env.PORT||3000,()=>console.log('SULTARA running'))}).catch(e=>{console.error(e);process.exit(1)});
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  });
