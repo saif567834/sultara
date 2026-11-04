@@ -1,33 +1,54 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Track your SULTARA order</title><meta name="description" content="Track your SULTARA orders using your registered phone number.">
+<title>Track your SULTARA orders</title><meta name="description" content="Track SULTARA orders using your registered mobile number.">
 <style>
-:root{color-scheme:dark;--g:#d4a84b;--g2:#f3d98b;--l:#3a2f1c;--m:#a89d86}*{box-sizing:border-box}
-body{margin:0;background:#0a0806;color:#f1e8d6;font:17px/1.6 system-ui,sans-serif;padding:24px 5vw;max-width:760px;margin:auto}
-h1{font-family:Georgia,serif;color:var(--g2);font-size:38px;margin:.2em 0}a{color:var(--g2)}
+:root{color-scheme:dark;--g:#d4a84b;--g2:#f3d98b;--l:#3a2f1c;--m:#a89d86}
+*{box-sizing:border-box}body{margin:0;background:#0a0806;color:#f1e8d6;font:16px/1.6 system-ui,sans-serif;padding:24px 5vw;max-width:850px;margin:auto}
+h1{font-family:Georgia,serif;color:var(--g2);font-size:36px;margin:.2em 0}a{color:var(--g2)}
 label{font-size:14px;color:var(--m)}input{width:100%;background:#15110c;border:1px solid var(--l);color:inherit;padding:12px;margin:4px 0 14px;font:inherit;border-radius:3px}
-button,.b{background:linear-gradient(100deg,#b8892e,#f3d98b,#b8892e);color:#1a1204;border:0;padding:12px 22px;border-radius:3px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block;margin:0 8px 8px 0}
-.o{background:none;color:var(--g2);border:1px solid var(--g)}#err{color:#f88}[hidden]{display:none!important}
-.bar{height:8px;background:var(--l);border-radius:4px;margin:18px 0}.bar i{display:block;height:100%;background:var(--g);border-radius:4px}
-ol{list-style:none;padding:0;margin:0}li{padding:10px 0 10px 30px;position:relative;color:var(--m);border-left:2px solid var(--l);margin-left:8px}
-li:before{content:"";position:absolute;left:-9px;top:15px;width:16px;height:16px;border-radius:50%;background:#0a0806;border:2px solid var(--l)}
-li.d{color:#f1e8d6;border-color:var(--g)}li.d:before{background:var(--g);border-color:var(--g)}li small{display:block;color:var(--m)}
-dl{display:grid;grid-template-columns:140px 1fr;gap:6px 12px}dt{color:var(--m)}dd{margin:0}
+button,.b{background:linear-gradient(100deg,#b8892e,#f3d98b,#b8892e);color:#1a1204;border:0;padding:11px 20px;border-radius:3px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block}
+#err{color:#ff9999}.card{border:1px solid var(--l);padding:18px;margin:18px 0;border-radius:6px;background:#100d09}
+.muted{color:var(--m)}.pill{display:inline-block;border:1px solid var(--g);color:var(--g2);padding:2px 9px;border-radius:20px;font-size:13px}
+dl{display:grid;grid-template-columns:140px 1fr;gap:6px 12px}dt{color:var(--m)}dd{margin:0;overflow-wrap:anywhere}
+@media(max-width:520px){dl{grid-template-columns:1fr;gap:0}dd{margin-bottom:9px}}
 </style></head><body>
 <a href="/">← Back to shop</a><h1>Track your order</h1>
-<div id="f1"><label for="ph">Phone number used for your order</label><input id="ph" inputmode="tel" maxlength="15" autocomplete="tel" placeholder="Enter registered phone number"><button id="req">Track my orders</button></div>
-<p id="err" role="alert"></p>
-<div id="res" hidden></div>
+<p class="muted">Enter the mobile number you used when placing your order. No order ID or OTP is needed.</p>
+<label for="ph">Phone number used for your order</label>
+<input id="ph" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="Enter your 10-digit mobile number">
+<button id="find">Track my orders</button><p id="err" role="alert"></p><div id="res"></div>
 <script>
-const $=i=>document.getElementById(i);
-const t=(tag,txt,cls)=>{const e=document.createElement(tag);if(txt!=null)e.textContent=txt;if(cls)e.className=cls;return e};
-async function lookup(){const r=await fetch('/api/track/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:$('ph').value})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not find orders.');return d.orders||[]}
-const dt=s=>s?new Date(s).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'';
-const NAMES={placed:'Order placed',confirmed:'Order confirmed',processing:'Processing',packed:'Packed',shipped:'Shipped',out_for_delivery:'Out for delivery',delivered:'Delivered'};
-$('req').onclick=async()=>{ $('err').textContent='';$('res').hidden=true;try{const orders=await lookup();const R=$('res');R.replaceChildren();R.hidden=false;if(!orders.length){R.append(t('p','No orders found for this phone number. Please check the number or contact support.'));return}
- orders.forEach((o,n)=>{const card=t('section');card.style.cssText='border:1px solid var(--l);padding:16px;margin:18px 0;border-radius:4px';card.append(t('h2','Order '+(n+1)));card.append(t('p','Placed: '+dt(o.createdAt)));const status=o.orderStatus==='cancelled'?'Cancelled':(NAMES[o.orderStatus]||o.orderStatus);card.append(t('h3',status));
- const keys=Object.keys(NAMES),idx=keys.indexOf(o.orderStatus);if(o.orderStatus!=='cancelled'){const bar=t('div','','bar'),i=t('i');i.style.width=((Math.max(0,idx)+1)/keys.length*100)+'%';bar.append(i);card.append(bar)}
- const dl=t('dl');const add=(a,b)=>{if(b){dl.append(t('dt',a),t('dd',String(b)))}};add('Items',o.items.map(i=>i.name+' × '+i.qty).join(', '));add('Total','₹'+o.amount);add('Payment',o.paymentMethod==='cod'?'Cash on delivery':'Online');add('Payment status',o.paymentStatus.replace(/_/g,' '));add('Courier',o.courierName);add('Tracking number',o.trackingNumber);add('Estimated delivery',o.estimatedDelivery);add('Note',o.shippingNotes);add('Last updated',dt(o.updatedAt));card.append(dl);
- if(o.trackingUrl){const a=t('a','Track shipment with courier','b');a.href=o.trackingUrl;a.target='_blank';a.rel='noopener noreferrer';card.append(a)}R.append(card)});
- const w=t('a','Contact support on WhatsApp','b o');w.href='https://wa.me/917075656837?text='+encodeURIComponent('Hi SULTARA, I need help tracking my order.');w.target='_blank';w.rel='noopener';R.append(w);
- }catch(e){$('err').textContent=e.message}};
+const $=id=>document.getElementById(id);
+const el=(tag,txt,cls)=>{const n=document.createElement(tag);if(txt!=null)n.textContent=txt;if(cls)n.className=cls;return n};
+const date=s=>s?new Date(s).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Not updated';
+const statusNames={placed:'Order placed',confirmed:'Confirmed',processing:'Processing',packed:'Packed',shipped:'Shipped',out_for_delivery:'Out for delivery',delivered:'Delivered',cancelled:'Cancelled'};
+async function track(){
+ $('err').textContent='';$('res').replaceChildren();
+ const phone=$('ph').value.trim();
+ if(phone.replace(/\D/g,'').length<10){$('err').textContent='Please enter the 10-digit mobile number used at checkout.';return}
+ $('find').disabled=true;$('find').textContent='Searching...';
+ try{
+  const r=await fetch('/api/track/orders?phone='+encodeURIComponent(phone));
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||'Unable to find orders.');
+  if(!d.orders||!d.orders.length){$('err').textContent='No orders found for this phone number. Use the same number entered at checkout, including the correct digits.';return}
+  $('res').append(el('h2',d.orders.length+' order(s) found'));
+  for(const o of d.orders){
+   const card=el('section',null,'card');
+   const head=el('div');head.append(el('h3',o.orderId),el('span',statusNames[o.orderStatus]||o.orderStatus,'pill'));card.append(head);
+   const list=el('p',(o.items||[]).map(i=>i.name+' × '+i.qty).join(', ')||'Order items');card.append(list);
+   const dl=el('dl');const add=(k,v)=>{if(v!==undefined&&v!==null&&v!=='')dl.append(el('dt',k),el('dd',String(v)))};
+   add('Order date',date(o.createdAt));add('Total','₹'+o.amount);
+   add('Payment',o.paymentMethod==='cod'?'Cash on delivery':'Online');
+   add('Payment status',String(o.paymentStatus||'').replace(/_/g,' '));
+   add('Courier',o.courierName);add('Tracking number',o.trackingNumber);
+   add('Estimated delivery',o.estimatedDelivery);add('Shipping note',o.shippingNotes);
+   add('Last updated',date(o.updatedAt));card.append(dl);
+   if(o.trackingUrl){const a=el('a','Track shipment with courier','b');a.href=o.trackingUrl;a.target='_blank';a.rel='noopener noreferrer';card.append(a)}
+   $('res').append(card);
+  }
+ }catch(e){$('err').textContent=e.message}
+ finally{$('find').disabled=false;$('find').textContent='Track my orders'}
+}
+$('find').addEventListener('click',track);
+$('ph').addEventListener('keydown',e=>{if(e.key==='Enter')track()});
 </script></body></html>
