@@ -151,8 +151,16 @@ app.post('/api/track/cancel',trackAuth,async(req,res)=>{const o=req.order;
  await release(o.items.map(i=>({product:{_id:i.productId},qty:i.qty})));o.orderStatus='cancelled';o.statusHistory.push({status:'cancelled by customer'});await o.save();res.json(view(o))});
 app.get('/track-order',(q,r)=>r.sendFile(path.join(__dirname,'public','tracking.html')));
 app.use(express.static(path.join(__dirname,'public')));
+const PORT = process.env.PORT || 3000;
+
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB connected"))
+  .then(() => {
+    console.log("MongoDB connected");
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`SULTARA running on port ${PORT}`);
+    });
+  })
   .catch(err => {
     console.error("MongoDB connection error:", err);
     process.exit(1);
