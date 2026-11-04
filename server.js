@@ -114,41 +114,42 @@ app.patch('/api/admin/orders/:id',admin,wrap(async(q,r)=>{const b=q.body,s=b.ord
  await o.save();const j=o.toObject();delete j.otpHash;delete j.otpExpires;delete j.otpTries;r.json(j)}));
 
 
-// ---------- customer order tracking (OTP protected) ----------
+// ---------- customer order tracking (phone number only) ----------
+// The customer enters the phone number used at checkout. Match the final
+// 10 digits so +91, spaces, and punctuation do not affect the lookup.
 const last10=p=>String(p||'').replace(/\D/g,'').slice(-10);
-const otpHash=(otp,id)=>crypto.createHash('sha256').update(otp+id+process.env.JWT_SECRET).digest('hex');
-async function sendOtp(phone,otp){ // plug in any SMS/WhatsApp provider that accepts a JSON webhook
- const msg=`Your SULTARA order tracking code is ${otp}. It is valid for 10 minutes.`;
- if(process.env.SMS_WEBHOOK_URL){const r=await fetch(process.env.SMS_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+(process.env.SMS_WEBHOOK_TOKEN||'')},body:JSON.stringify({phone:'91'+phone,message:msg})});return r.ok}
- if(process.env.NODE_ENV!=='production'){console.log('[DEV ONLY] OTP for '+phone+': '+otp);return true}
- return false}
-const trackLimit=rateLimit({windowMs:15*60*1000,max:8,message:{error:'Too many attempts. Please try again later.'}});
-app.post('/api/track/request',trackLimit,async(req,res)=>{try{
- const orderId=String(req.body.orderId||'').trim().toUpperCase(),phone=last10(req.body.phone);
- const o=await Order.findOne({orderId});
- if(o&&last10(o.customer.phone)===phone){const otp=String(crypto.randomInt(100000,1000000));
-  o.otpHash=otpHash(otp,o.orderId);o.otpExpires=new Date(Date.now()+10*60*1000);o.otpTries=0;await o.save();
-  if(!(await sendOtp(phone,otp)))return res.status(503).json({error:'OTP service is not set up yet. Please contact us on WhatsApp.'})}
- res.json({ok:true,message:'If the order ID and phone number match, a 6-digit code has been sent.'})
-}catch(e){console.error(e);res.status(500).json({error:'Something went wrong.'})}});
-app.post('/api/track/verify',trackLimit,async(req,res)=>{try{
- const orderId=String(req.body.orderId||'').trim().toUpperCase(),otp=String(req.body.otp||'').trim();
- const o=await Order.findOne({orderId});
- if(!o||!o.otpHash||o.otpExpires<new Date()||o.otpTries>=5||!safeEq(otpHash(otp,orderId),o.otpHash)){
-  if(o&&o.otpHash){o.otpTries++;await o.save()}
-  return res.status(401).json({error:'Wrong or expired code.'})}
- o.otpHash=undefined;o.otpExpires=undefined;await o.save();
- res.json({token:jwt.sign({role:'track',orderId},process.env.JWT_SECRET,{expiresIn:'30m'})})
-}catch(e){res.status(500).json({error:'Something went wrong.'})}});
-const trackAuth=async(req,res,next)=>{try{const d=jwt.verify((req.headers.authorization||'').replace('Bearer ',''),process.env.JWT_SECRET);
- if(d.role!=='track')throw 0;req.order=await Order.findOne({orderId:d.orderId});if(!req.order)throw 0;next()}catch(e){res.status(401).json({error:'Please verify again.'})}};
-const view=o=>({orderId:o.orderId,createdAt:o.createdAt,updatedAt:o.updatedAt,customerName:o.customer.name,address:o.customer.address,items:o.items,amount:o.amount,
- paymentMethod:o.paymentMethod,paymentStatus:o.paymentStatus,orderStatus:o.orderStatus,statusHistory:o.statusHistory,courierName:o.courierName,trackingNumber:o.trackingNumber,
- trackingUrl:o.trackingUrl,estimatedDelivery:o.estimatedDelivery,shippingNotes:o.shippingNotes});
-app.get('/api/track/order',trackAuth,(req,res)=>res.json(view(req.order)));
-app.post('/api/track/cancel',trackAuth,async(req,res)=>{const o=req.order;
- if(o.paymentMethod!=='cod'||!['placed','confirmed'].includes(o.orderStatus))return res.status(400).json({error:'This order cannot be cancelled online. Please contact us on WhatsApp.'});
- await release(o.items.map(i=>({product:{_id:i.productId},qty:i.qty})));o.orderStatus='cancelled';o.statusHistory.push({status:'cancelled by customer'});await o.save();res.json(view(o))});
+app.get('/api/track/orders',async(req,res)=>{
+ try{
+  const phone=last10(req.query.phone);
+  if(phone.length!==10) return res.status(400).json({error:'Enter a valid 10-digit mobile number.'});
+
+  // Read candidate phone fields then normalize in Node. This supports legacy
+  // records with country codes and formatting differences.
+  const candidates=await Order.find({'customer.phone':{$exists:true,$ne:''}})
+    .select('_id customer.phone').lean();
+  const ids=candidates
+    .filter(o=>last10(o.customer&&o.customer.phone)===phone)
+    .map(o=>o._id);
+
+  if(!ids.length) return res.json({orders:[]});
+  const orders=await Order.find({_id:{$in:ids}})
+    .sort({createdAt:-1}).limit(20)
+    .select('orderId createdAt updatedAt items amount paymentMethod paymentStatus orderStatus statusHistory courierName trackingNumber trackingUrl estimatedDelivery shippingNotes')
+    .lean();
+
+  // Do not expose customer's name, address, or full phone number.
+  res.json({orders:orders.map(o=>({
+    orderId:o.orderId,createdAt:o.createdAt,updatedAt:o.updatedAt,
+    items:(o.items||[]).map(i=>({name:i.name,qty:i.qty})),
+    amount:o.amount,paymentMethod:o.paymentMethod,paymentStatus:o.paymentStatus,
+    orderStatus:o.orderStatus,statusHistory:o.statusHistory||[],
+    courierName:o.courierName,trackingNumber:o.trackingNumber,
+    trackingUrl:o.trackingUrl,estimatedDelivery:o.estimatedDelivery,
+    shippingNotes:o.shippingNotes
+  }))});
+ }catch(e){console.error('Phone tracking lookup error:',e);res.status(500).json({error:'Unable to look up orders right now.'})}
+});
+
 app.get('/track-order',(q,r)=>r.sendFile(path.join(__dirname,'public','tracking.html')));
 app.use(express.static(path.join(__dirname,'public')));
 const PORT = process.env.PORT || 3000;
